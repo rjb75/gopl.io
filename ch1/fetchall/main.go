@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -36,12 +37,30 @@ func fetch(url string, ch chan<- string) {
 		return
 	}
 
-	nbytes, err := io.Copy(ioutil.Discard, resp.Body)
-	resp.Body.Close() // don't leak resources
+	body, err := ioutil.ReadAll(resp.Body)
+
 	if err != nil {
 		ch <- fmt.Sprintf("while reading %s: %v", url, err)
 		return
 	}
+
+	filename := strings.ReplaceAll(url, "http://", "")
+
+	file, err := os.Create(fmt.Sprintf("%s%d%s", filename, start.Unix(), ".html"))
+
+	if err != nil {
+		ch <- fmt.Sprint(err)
+	}
+
+	_, err = file.Write(body)
+
+	if err != nil {
+		ch <- fmt.Sprint(err)
+	}
+
+	nbytes, err := io.Copy(io.Discard, resp.Body)
+	resp.Body.Close() // don't leak resources
+
 	secs := time.Since(start).Seconds()
 	ch <- fmt.Sprintf("%.2fs  %7d  %s", secs, nbytes, url)
 }
